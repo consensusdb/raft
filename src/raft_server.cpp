@@ -21,20 +21,21 @@ void Server::on(RPC::TimeoutRequest) {
   storage->current_term(storage->current_term() + 1);
 
   // clear any previous votes and vote for self
-  for (auto &peer : state.known_peers) {
-    peer.voted_for_me = (state.id == peer.id);
-  }
+  std::for_each(
+      state.known_peers.begin(), state.known_peers.end(),
+      [this](auto peer) mutable { peer.voted_for_me = (state.id == peer.id); });
 
   storage->voted_for(state.id);
   state.leader_id = state.id;
 
   // return messages
   auto info = storage->get_last_entry_info();
-  RPC::VoteRequest vote_req = {storage->current_term(), state.id, info.index,
-                               info.term};
+  RPC::VoteRequest vote_req = {state.id, "", storage->current_term(), state.id,
+                               info.index, info.term};
   std::for_each(state.known_peers.begin(), state.known_peers.end(),
                 [&](auto &peer) {
                   if (peer.id != state.id) {
+                    vote_req.destination_id = peer.id;
                     callbacks.send(peer.id, vote_req);
                   }
                 });
@@ -51,33 +52,36 @@ void Server::on(RPC::HeartbeatRequest) {
       state.known_peers.begin(), state.known_peers.end(), [&](auto &peer) {
         if (peer.id != state.id) {
           RPC::AppendEntriesRequest ret;
+          ret.peer_id = state.id;
+          ret.destination_id = peer.id;
           ret.leader_commit = storage->last_commit().index;
           ret.term = storage->current_term();
           ret.prev_log_index = state.find_peer(peer.id).match_index;
           ret.prev_log_term = storage->get_entry_info(ret.prev_log_index).term;
           ret.entries = {};
-          ret.leader_id = state.leader_id;
           callbacks.send(peer.id, ret);
         }
       });
   callbacks.set_heartbeat_timeout();
 }
 
-void Server::on(const std::string &id, RPC::VoteRequest request) {
+void Server::on(const std::string &, RPC::VoteRequest request) {
+  if (request.destination_id != state.id) {
+    callbacks.drop(request.peer_id);
+    return;
+  }
   std::string vote_for;
   if (request.term > storage->current_term()) {
     step_down(request.term);
   }
-  RPC::VoteResponse ret = {state.id, storage->current_term(), false};
-  if (state.minimum_timeout_reached == false) {
-    std::cout << state.id << " minimum timeout not reached" << std::endl;
-  }
+  RPC::VoteResponse ret = {state.id, request.peer_id, storage->current_term(),
+                           false};
   if (state.minimum_timeout_reached &&
       request.term >= storage->current_term() &&
       (storage->voted_for().empty() ||
        storage->voted_for() == request.candidate_id) &&
       request.last_log_index >= storage->get_last_entry_info().index) {
-    ret = {state.id, request.term, true};
+    ret = {state.id, request.peer_id, request.term, true};
     storage->voted_for(request.candidate_id);
     state.leader_id = request.candidate_id;
   }
@@ -87,25 +91,28 @@ void Server::on(const std::string &id, RPC::VoteRequest request) {
     callbacks.set_minimum_timeout();
     callbacks.set_vote_timeout();
   }
-  callbacks.send(id, std::move(ret));
+  callbacks.send(request.peer_id, std::move(ret));
 }
 
-void Server::on(const std::string &id, RPC::AppendEntriesRequest request) {
-  RPC::AppendEntriesResponse response = {state.id, storage->current_term(),
-                                         false, 0};
+void Server::on(const std::string &, RPC::AppendEntriesRequest request) {
+  if (request.destination_id != state.id) {
+    callbacks.drop(request.peer_id);
+    return;
+  }
+  RPC::AppendEntriesResponse response = {state.id, request.peer_id,
+                                         storage->current_term(), false, 0};
   if (request.term < storage->current_term()) {
-    callbacks.send(id, std::move(response));
+    callbacks.send(request.peer_id, std::move(response));
     return;
   }
 
-  if (request.term > storage->current_term()) {
+  if (request.term > storage->current_term() ||
+      (request.term == storage->current_term() &&
+       state.role == State::Role::Candidate)) {
     step_down(request.term);
   }
 
-  if (request.term == storage->current_term()) {
-    state.leader_id = request.leader_id;
-    state.role = State::Role::Follower;
-  }
+  state.leader_id = request.peer_id;
 
   auto info = storage->get_last_entry_info();
 
@@ -123,10 +130,14 @@ void Server::on(const std::string &id, RPC::AppendEntriesRequest request) {
     callbacks.set_minimum_timeout();
     callbacks.set_vote_timeout();
   }
-  callbacks.send(id, std::move(response));
+  callbacks.send(request.peer_id, std::move(response));
 }
 
 void Server::on(const std::string &, RPC::VoteResponse response) {
+  if (response.destination_id != state.id) {
+    callbacks.drop(response.peer_id);
+    return;
+  }
   if (response.term > storage->current_term()) {
     step_down(response.term);
   }
@@ -152,8 +163,9 @@ void Server::on(const std::string &, RPC::VoteResponse response) {
                       });
 
         RPC::AppendEntriesRequest request;
+        request.peer_id = state.id;
         request.leader_commit = storage->last_commit().index;
-        request.leader_id = state.leader_id;
+        request.peer_id = state.leader_id;
         request.prev_log_index = info.index;
         request.prev_log_term = info.term;
         request.term = storage->current_term();
@@ -161,6 +173,7 @@ void Server::on(const std::string &, RPC::VoteResponse response) {
         std::for_each(state.known_peers.begin(), state.known_peers.end(),
                       [&](auto &peer) {
                         if (peer.id != state.id) {
+                          request.destination_id = peer.id;
                           callbacks.send(peer.id, request);
                         }
                       });
@@ -172,10 +185,15 @@ void Server::on(const std::string &, RPC::VoteResponse response) {
   }
 }
 
-void Server::on(const std::string &peer_id,
-                RPC::AppendEntriesResponse response) {
+void Server::on(const std::string &, RPC::AppendEntriesResponse response) {
+  if (response.destination_id != state.id) {
+    callbacks.drop(response.peer_id);
+    return;
+  }
   if (response.term > storage->current_term()) {
     step_down(response.term);
+  } else if (response.term < storage->current_term()) {
+    return;
   }
 
   if (state.role == State::Role::Leader) {
@@ -186,14 +204,15 @@ void Server::on(const std::string &peer_id,
         peer.next_index = 1;
       }
       RPC::AppendEntriesRequest request;
+      request.peer_id = state.leader_id;
+      request.destination_id = response.peer_id;
       request.leader_commit = storage->last_commit().index;
       request.term = storage->current_term();
       request.prev_log_index = peer.next_index - 1;
       request.prev_log_term =
           storage->get_entry_info(request.prev_log_index).term;
       request.entries = storage->entries_since(request.prev_log_index);
-      request.leader_id = state.leader_id;
-      callbacks.send(peer_id, std::move(request));
+      callbacks.send(response.peer_id, std::move(request));
       return;
     } else if (peer.match_index != response.match_index) {
       // the match_index in the response doesn't correspond to what the leader
@@ -218,12 +237,14 @@ void Server::on(const std::string &peer_id,
   }
 }
 
-void Server::on(const std::string &client_id, RPC::ClientRequest request) {
-  RPC::ClientResponse ret = {
-      "OK", {0, 0}, state.leader_id, state.find_peer(state.leader_id).ip_port};
-  if (request.data.empty() || request.data.find(' ') != std::string::npos) {
-    ret.error_message = "InvalidMessage";
-  } else if (state.role != State::Role::Leader) {
+void Server::on(const std::string &, RPC::ClientRequest request) {
+  RPC::ClientResponse ret = {state.id,
+                             request.client_id,
+                             state.leader_id,
+                             "OK",
+                             {0, 0},
+                             state.find_peer(state.leader_id).ip_port};
+  if (state.role != State::Role::Leader || request.leader_id != state.id) {
     ret.error_message = "NotLeader";
   } else {
     uint64_t new_index = storage->get_last_entry_info().index + 1;
@@ -239,18 +260,19 @@ void Server::on(const std::string &client_id, RPC::ClientRequest request) {
     }
   }
   if (ret.error_message != "OK") {
-    callbacks.send(client_id, std::move(ret));
+    callbacks.send(request.client_id, std::move(ret));
   } else {
-    callbacks.client_waiting(client_id, ret.entry_info);
+    callbacks.client_waiting(request.client_id, ret.entry_info);
 
     raft::RPC::AppendEntriesRequest req;
+    req.peer_id = state.id;
     req.leader_commit = storage->last_commit().index;
-    req.leader_id = state.id;
     req.term = storage->current_term();
 
     std::for_each(
         state.known_peers.begin(), state.known_peers.end(), [&](auto &peer) {
           if (peer.id == state.id) return;
+          req.destination_id = peer.id;
           req.prev_log_index = peer.next_index - 1;
           req.prev_log_term = storage->get_entry_info(req.prev_log_index).term;
           req.entries = storage->entries_since(req.prev_log_index);
@@ -268,21 +290,23 @@ void Server::timeout() {
   if (state.role == raft::State::Role::Leader) {
     on(raft::RPC::HeartbeatRequest{});
   } else {
-    std::cout << state.id << " vote timeout" << std::endl;
     on(raft::RPC::TimeoutRequest{});
   }
 }
 
 void Server::step_down(uint64_t new_term) {
-  std::cout << state.id << " stepdown on term " << new_term << std::endl;
   // out of sync
   // sync term
-  storage->current_term(new_term);
-
-  // fall - back to follower
-  state.role = State::Role::Follower;
-  std::for_each(state.known_peers.begin(), state.known_peers.end(),
-                [](auto &peer) { peer.reset(); });
+  if (storage->current_term() != new_term) {
+    storage->current_term(new_term);
+  }
   storage->voted_for("");
+
+  if (state.role != State::Role::Follower) {
+    // fall - back to follower
+    state.role = State::Role::Follower;
+    std::for_each(state.known_peers.begin(), state.known_peers.end(),
+                  [](auto &peer) { peer.reset(); });
+  }
 }
 }

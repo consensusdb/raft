@@ -19,8 +19,11 @@ class Server : public raft::Callbacks,
          std::string id, raft::PeerInfo known_peers,
          std::unique_ptr<raft::Storage> storage,
          const network::MessageProcessorFactory& factory, int heartbeat_ms);
+  ~Server();
   void start();
+  void stop();
   void identify(const std::string& temp_id, const std::string& peer_id);
+  void drop(const std::string& temp_id);
 
   void send(const std::string& peer_id,
             const raft::RPC::AppendEntriesRequest& request);
@@ -54,15 +57,18 @@ class Server : public raft::Callbacks,
   ::asio::io_service& io_service_;
   tcp::acceptor acceptor_;
   tcp::acceptor client_acceptor_;
-  std::vector<std::shared_ptr<Session> > identified_peers_;
-  std::vector<std::shared_ptr<Session> > all_peers_;
+
+  std::vector<std::shared_ptr<Session> > peers_;
+
   std::unordered_map<std::string, std::shared_ptr<Session> > all_clients_;
   std::map<raft::EntryInfo, std::string> waiting_clients_;
+
   ::asio::high_resolution_timer timer_;
   ::asio::high_resolution_timer minimum_timer_;
   const network::MessageProcessorFactory& message_factory_;
   raft::Server raft_server_;
   uint64_t next_id_;
+  bool stop_;
 };
 }
 }

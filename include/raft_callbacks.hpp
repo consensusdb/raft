@@ -19,8 +19,8 @@ class Callbacks {
   virtual void send(const std::string& peer_id,
                     const raft::RPC::ClientResponse& response) = 0;
 
-  virtual void identify(const std::string& temp_id,
-                        const std::string& peer_id) = 0;
+  virtual void identify(const std::string& temp_id, const std::string& id) = 0;
+  virtual void drop(const std::string& peer_id) = 0;
 
   virtual void client_waiting(const std::string& peer_id,
                               const raft::EntryInfo& info) = 0;

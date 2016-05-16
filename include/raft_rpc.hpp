@@ -10,8 +10,9 @@ namespace raft {
 namespace RPC {
 
 struct AppendEntriesRequest {
+  std::string peer_id;  // also leader_id
+  std::string destination_id;
   uint64_t term;
-  std::string leader_id;
   uint64_t prev_log_index;
   uint64_t prev_log_term;
   uint64_t leader_commit;
@@ -20,12 +21,15 @@ struct AppendEntriesRequest {
 
 struct AppendEntriesResponse {
   std::string peer_id;
+  std::string destination_id;
   uint64_t term;
   bool success;
   uint64_t match_index;
 };
 
 struct VoteRequest {
+  std::string peer_id;
+  std::string destination_id;
   uint64_t term;
   std::string candidate_id;
   uint64_t last_log_index;
@@ -34,6 +38,7 @@ struct VoteRequest {
 
 struct VoteResponse {
   std::string peer_id;
+  std::string destination_id;
   uint64_t term;
   bool vote_granted;
 };
@@ -48,6 +53,8 @@ struct HeartbeatRequest {};
 struct MinimumTimeoutRequest {};
 
 struct ClientRequest {
+  std::string client_id;
+  std::string leader_id;
   std::string data;
 };
 
@@ -55,9 +62,11 @@ struct ClientRequest {
 // the leader information will contain the address of the leader to retry the
 // request.
 struct ClientResponse {
+  std::string peer_id;
+  std::string client_id;
+  std::string leader_id;
   std::string error_message;
   EntryInfo entry_info;
-  std::string leader_id;
   ip_port_t leader_info;
 };
 }

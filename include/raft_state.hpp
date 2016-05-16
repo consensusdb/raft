@@ -70,3 +70,16 @@ struct State {
   bool minimum_timeout_reached;
 };
 }
+
+inline std::ostream& operator<<(std::ostream& os, raft::State::Role& role) {
+  switch (role) {
+    case (raft::State::Role::Candidate):
+      return os << "candidate";
+    case (raft::State::Role::Leader):
+      return os << "leader";
+    case (raft::State::Role::Follower):
+      return os << "follower";
+    default:
+      return os << "????";
+  }
+}
