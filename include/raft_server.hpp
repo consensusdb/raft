@@ -48,6 +48,8 @@ class Server {
   void on(const std::string &peer_id, RPC::AppendEntriesResponse response);
 
   void on(const std::string &client_id, RPC::ClientRequest request);
+  
+  void on(const std::string &peer_id, RPC::ConfigChangeRequest request);
 
   // will return a vote request to all the peers to vote on
   void on(RPC::TimeoutRequest request);

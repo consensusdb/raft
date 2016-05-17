@@ -69,5 +69,25 @@ struct ClientResponse {
   EntryInfo entry_info;
   ip_port_t leader_info;
 };
+
+struct PeerConfig {
+  std::string name;
+  std::string address;
+  int peer_port;
+  int client_port;
+  bool is_new;
+};
+
+struct ConfigChangeRequest {
+  std::string peer_id;  // also leader_id
+  std::string destination_id;
+  uint64_t term;
+  uint64_t prev_log_index;
+  uint64_t prev_log_term;
+  uint64_t leader_commit;
+  uint64_t index;
+  std::vector<PeerConfig> peer_configs;
+};
+
 }
 }

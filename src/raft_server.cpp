@@ -293,6 +293,10 @@ void Server::timeout() {
     on(raft::RPC::TimeoutRequest{});
   }
 }
+  
+void Server::on(const std::string &, RPC::ConfigChangeRequest) {
+  //TODO
+}
 
 void Server::step_down(uint64_t new_term) {
   // out of sync

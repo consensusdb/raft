@@ -106,3 +106,41 @@ std::istream &operator>>(std::istream &is,
          response.entry_info.term >> response.leader_info.ip >>
          response.leader_info.client_port;
 }
+
+std::ostream &operator<<(std::ostream &os,
+                         const raft::RPC::ConfigChangeRequest &request) {
+   os << "ConfigChangeRequest " << request.peer_id
+      << " " <<  request.destination_id << " " <<  request.term << " " <<  request.prev_log_index
+      << " " <<  request.prev_log_term << " " <<  request.leader_commit << " " <<  request.index
+      << " " <<  request.term << " " << request.peer_configs.size() << " ";
+  std::for_each(request.peer_configs.begin(), request.peer_configs.end(),
+                [&os](auto peer) { os << peer<< " "; });
+  os << "\n";
+  return os;
+}
+
+std::istream &operator>>(std::istream &is, raft::RPC::ConfigChangeRequest &request) {
+  size_t num_peers;
+   is >>  request.peer_id
+      >>  request.destination_id >>  request.term >>  request.prev_log_index
+      >>  request.prev_log_term >>  request.leader_commit >>  request.index
+      >>  request.term >> num_peers;
+  request.peer_configs.reserve(num_peers);
+  for (size_t i = 0; i < num_peers; ++i) {
+    raft::RPC::PeerConfig peer;
+    is >> peer;
+    request.peer_configs.emplace_back(std::move(peer));
+  }
+  return is;
+}
+
+std::ostream &operator<<(std::ostream &os,
+                         const raft::RPC::PeerConfig& config) {
+  return os << config.name << " " <<config.address << " " <<config.peer_port
+            << " " <<config.client_port << " " <<config.is_new;
+}
+
+std::istream &operator>>(std::istream &is, raft::RPC::PeerConfig &config) {
+  return is >> config.name >> config.address >> config.peer_port
+            >> config.client_port >> config.is_new;
+}
