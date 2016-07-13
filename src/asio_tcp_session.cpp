@@ -13,7 +13,8 @@ Session::Session(std::shared_ptr<Server> server, tcp::socket socket,
       message_processor_(std::move(message_processor)),
       server_(std::move(server)),
       id_(std::move(id)),
-      stop_(true) {}
+      stop_(true),
+      close_(false){}
 
 Session::~Session() {}
 
@@ -40,6 +41,9 @@ void Session::do_read(buffer_t buffer) {
         } else {
           stop_ = true;
           if (write_queue_.empty()) {
+            if ( close_ ) {
+              socket_.close();
+            }
             // if the write queue isn't empty,
             // let the write callback drop the connection
             server().drop(id());
@@ -51,10 +55,17 @@ void Session::do_read(buffer_t buffer) {
 std::string &Session::id() { return id_; }
 
 void Session::stop() {
-  if (stop_) {
+  stop_ = true;
+}
+
+void Session::stop_and_close() {
+  if ( close_ == true ) {
     return;
   }
-  stop_ = true;
+  stop();
+  close_ = true;
+  std::error_code ec;
+  socket_.shutdown(tcp::socket::shutdown_both,ec);
 }
 
 void Session::send(std::string message) {
@@ -80,10 +91,13 @@ void Session::do_write() {
                         if (!ec && !stop_) {
                           write_queue_.pop_front();
                           if (!write_queue_.empty()) {
-                            this->do_write();
+                            do_write();
                           }
                         } else {
                           stop_ = true;
+                          if ( close_ ) {
+                            socket_.close();
+                          }
                           write_queue_.clear();
                           server().drop(id());
                         }

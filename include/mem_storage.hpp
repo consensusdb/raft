@@ -1,10 +1,13 @@
 #pragma once
 #include <raft.hpp>
+#include <map>
+#include <list>
+#include <fstream>
 
 namespace avery {
 class MemStorage : public raft::Storage {
  public:
-  MemStorage();
+  MemStorage(const char * filename);
   uint64_t append(const std::vector<raft::Entry> &entries);
   void voted_for(std::string id);
   void current_term(uint64_t current_term);
@@ -17,9 +20,12 @@ class MemStorage : public raft::Storage {
   raft::EntryInfo get_entry_info(uint64_t index);
 
  private:
-  std::vector<raft::Entry> entries_;
+  typedef std::vector<raft::Entry> entries_t;
+  entries_t entries_;
+  std::ofstream log_file_;
   std::string voted_for_;
-  uint64_t current_term_;
+  raft::EntryInfo last_entry_info_;
   raft::EntryInfo commit_info_;
+  uint64_t current_term_;
 };
 }

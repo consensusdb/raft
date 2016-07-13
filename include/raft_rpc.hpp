@@ -17,6 +17,7 @@ struct AppendEntriesRequest {
   uint64_t prev_log_term;
   uint64_t leader_commit;
   std::vector<Entry> entries;
+  uint64_t request_watermark;
 };
 
 struct AppendEntriesResponse {
@@ -25,6 +26,7 @@ struct AppendEntriesResponse {
   uint64_t term;
   bool success;
   uint64_t match_index;
+  uint64_t request_watermark;
 };
 
 struct VoteRequest {
@@ -54,20 +56,29 @@ struct MinimumTimeoutRequest {};
 
 struct ClientRequest {
   std::string client_id;
-  std::string leader_id;
   std::string data;
 };
 
-// respond to the client. if the server is not the leader, success will be false
-// the leader information will contain the address of the leader to retry the
-// request.
 struct ClientResponse {
+  EntryInfo entry_info;
+};
+
+struct NotLeaderResponse {
   std::string peer_id;
   std::string client_id;
   std::string leader_id;
-  std::string error_message;
-  EntryInfo entry_info;
   ip_port_t leader_info;
+};
+
+struct LocalFailureResponse {
+
+};
+
+struct CurrentEntryRequest {
+};
+
+struct CurrentEntryResponse {
+  EntryInfo entry_info;
 };
 
 struct PeerConfig {

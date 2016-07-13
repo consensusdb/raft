@@ -20,6 +20,7 @@ class Session : public std::enable_shared_from_this<Session> {
   Server &server();
   void start();
   void stop();
+  void stop_and_close();
   void send(std::string message);
   std::string &id();
   MessageProcessor &message_processor();
@@ -34,6 +35,7 @@ class Session : public std::enable_shared_from_this<Session> {
   std::list<std::string> write_queue_;
   std::string id_;
   bool stop_;
+  bool close_;
 };
 }
 }

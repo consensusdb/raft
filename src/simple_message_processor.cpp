@@ -8,6 +8,7 @@
 #include <string>
 #include <simple_serialize.hpp>
 #include <sstream>
+#include <functional>
 
 namespace {
 // generic function that tokenizes on new-line. returns the remaining data
@@ -80,31 +81,39 @@ void PeerMessageProcessor::process_message(std::string &id, std::string message,
     if (name == "AppendEntriesRequest") {
       raft::RPC::AppendEntriesRequest request;
       s >> request;
-      if (request.peer_id != id) {
-        server.callbacks.identify(id, request.peer_id);
+      if (request.peer_id != id && !server.callbacks.identify(id, request.peer_id)) {
+        server.callbacks.drop(request.peer_id);
+        return;
       }
-      server.on(id, std::move(request));
+      server.on(request.peer_id, std::move(request));
     } else if (name == "AppendEntriesResponse") {
       raft::RPC::AppendEntriesResponse response;
       s >> response;
-      if (response.peer_id != id) {
-        server.callbacks.identify(id, response.peer_id);
+      if ( response.peer_id != id && !server.callbacks.identify(id, response.peer_id) ) {
+        server.callbacks.drop(response.peer_id);
+        return;
       }
-      server.on(id, std::move(response));
+      server.on(response.peer_id, std::move(response));
     } else if (name == "VoteResponse") {
       raft::RPC::VoteResponse response;
       s >> response;
-      if (response.peer_id != id) {
-        server.callbacks.identify(id, response.peer_id);
+      if ( response.peer_id != id && !server.callbacks.identify(id, response.peer_id) ) {
+        server.callbacks.drop(response.peer_id);
+        return;
       }
-      server.on(id, std::move(response));
+      server.on(response.peer_id, std::move(response));
     } else if (name == "VoteRequest") {
       raft::RPC::VoteRequest request;
       s >> request;
-      if (request.peer_id != id) {
-        server.callbacks.identify(id, request.peer_id);
+      if ( request.peer_id != id && !server.callbacks.identify(id, request.peer_id) ) {
+        server.callbacks.drop(request.peer_id);
+        return;
       }
-      server.on(id, std::move(request));
+      server.on(request.peer_id, std::move(request));
+    } else if ( name == "ConfigChangeRequest" ) {
+      raft::RPC::ConfigChangeRequest request;
+      s >> request;
+      server.on(request.peer_id, std::move(request));
     } else {
       // failed to parse header
       server.callbacks.drop(id);
@@ -132,9 +141,29 @@ std::string ClientMessageProcessor::serialize(
   return oss.str();
 }
 std::string ClientMessageProcessor::serialize(
-    raft::RPC::ClientResponse request) const {
+    raft::RPC::ClientResponse response) const {
   std::ostringstream oss;
-  oss << request;
+  oss << response;
+  return oss.str();
+}
+
+std::string ClientMessageProcessor::serialize(
+  raft::RPC::LocalFailureResponse response) const {
+  std::ostringstream oss;
+  oss << response;
+  return oss.str();
+}
+
+std::string ClientMessageProcessor::serialize(
+  raft::RPC::NotLeaderResponse response) const {
+  std::ostringstream oss;
+  oss << response;
+  return oss.str();
+}
+
+std::string ClientMessageProcessor::serialize(raft::RPC::CurrentEntryResponse response) const {
+  std::ostringstream oss;
+  oss << response;
   return oss.str();
 }
 
@@ -149,13 +178,16 @@ void ClientMessageProcessor::process_message(std::string &id,
     if (name == "ClientRequest") {
       raft::RPC::ClientRequest request;
       s >> request;
+      request.client_id = id;
       server.on(id, std::move(request));
+    } else if ( name == "CurrentEntryRequest" ) {
+      server.callbacks.client_send(id, raft::RPC::CurrentEntryResponse{server.storage->get_last_entry_info()});
     } else {
       // failed to parse header
       server.callbacks.drop(id);
     }
   } catch (const std::istringstream::failure &) {
-    // failed to pare the message after a valid header
+    // failed to parse the message after a valid header
     server.callbacks.drop(id);
   }
 }

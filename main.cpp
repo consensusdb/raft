@@ -19,7 +19,7 @@ int main() {
     {"Farter", "127.0.0.1", 8005, 3005 },
     {"Deadly", "127.0.0.1", 8006, 3006}
   };
-  int heartbeat_ms = 100;
+  int heartbeat_ms = 200;
 
   asio::io_service io_service;
 
@@ -27,7 +27,7 @@ int main() {
   avery::MyMessageProcessoryFactory message_factory;
 
   std::for_each(peers.begin(), peers.end(), [&](auto peer) {
-    servers.emplace_back(std::make_shared<network::asio::Server>(io_service, peer.ip_port.port, peer.ip_port.client_port, peer.id, peers, std::unique_ptr<raft::Storage >{ new avery::MemStorage() }, message_factory, heartbeat_ms));
+    servers.emplace_back(std::make_shared<network::asio::Server>(io_service, peer.ip_port.port, peer.ip_port.client_port, peer.id, peers, std::unique_ptr<raft::Storage >{ new avery::MemStorage(std::string(peer.id + ".log").c_str()) }, message_factory, heartbeat_ms));
     servers.back()->start();
   });
 
@@ -56,10 +56,8 @@ int main() {
             << servers_running << "/" << is_server_on.size() << std::endl;
           server->stop();
           if ( servers_running < (1 + (is_server_on.size() / 2)) ) {
-            if ( killing_leader ) {
-              quorum_broken = true;
-              std::cout << "><(((('> shark attack quorum is broken no leader should be elected" << std::endl;
-            }
+            quorum_broken = true;
+            std::cout << "><(((('> shark attack quorum is broken no leader should be elected" << std::endl;
           } else if ( killing_leader ) {
             std::cout << "><(((('> shark attack new leader will be elected" << std::endl;
           }
@@ -82,9 +80,6 @@ int main() {
   };
 
   shark_attack.async_wait(on_shark_attack);
-
-
-
 
   io_service.run();
   return 0;

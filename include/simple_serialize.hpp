@@ -29,7 +29,6 @@ std::istream &operator>>(std::istream &is, raft::RPC::ClientRequest &request);
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::ClientResponse &response);
-std::istream &operator>>(std::istream &is, raft::RPC::ClientResponse &response);
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::ConfigChangeRequest &request);
@@ -38,3 +37,12 @@ std::istream &operator>>(std::istream &is, raft::RPC::ConfigChangeRequest &reque
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::PeerConfig& config);
 std::istream &operator>>(std::istream &is, raft::RPC::PeerConfig &config);
+
+std::ostream &operator<<(std::ostream &os,
+                         const raft::RPC::LocalFailureResponse &response);
+
+std::ostream &operator<<(std::ostream &os,
+                         const raft::RPC::NotLeaderResponse &response);
+
+std::ostream &operator<<(std::ostream &os,
+                         const raft::RPC::CurrentEntryResponse &response);

@@ -22,7 +22,7 @@ class Server : public raft::Callbacks,
   ~Server();
   void start();
   void stop();
-  void identify(const std::string& temp_id, const std::string& peer_id);
+  bool identify(const std::string& temp_id, const std::string& peer_id);
   void drop(const std::string& temp_id);
 
   void send(const std::string& peer_id,
@@ -31,10 +31,18 @@ class Server : public raft::Callbacks,
             const raft::RPC::AppendEntriesResponse& request);
   void send(const std::string& peer_id, const raft::RPC::VoteRequest& request);
   void send(const std::string& peer_id, const raft::RPC::VoteResponse& request);
-  void send(const std::string& peer_id,
-            const raft::RPC::ClientRequest& request);
-  void send(const std::string& peer_id,
+
+  void client_send(const std::string& peer_id,
             const raft::RPC::ClientResponse& request);
+
+  void client_send(const std::string& peer_id,
+                   const raft::RPC::NotLeaderResponse& request);
+  
+  void client_send(const std::string& peer_id,
+                   const raft::RPC::LocalFailureResponse& request);
+
+  void client_send(const std::string& peer_id,
+                   const raft::RPC::CurrentEntryResponse& response);
 
   void set_heartbeat_timeout();
   void set_vote_timeout();
@@ -42,7 +50,6 @@ class Server : public raft::Callbacks,
 
   raft::Server& raft_server();
 
-  void client_waiting(const std::string& peer_id, const raft::EntryInfo& info);
   void commit_advanced(uint64_t commit_index);
 
  private:
@@ -52,6 +59,9 @@ class Server : public raft::Callbacks,
   template <class M>
   void session_send(const std::string& peer_id, M message);
 
+  template <class M>
+  void client_session_send(const std::string& client_id, M message);
+
   std::mt19937 mt_;
   std::uniform_int_distribution<int> dist_;
   ::asio::io_service& io_service_;
@@ -60,8 +70,9 @@ class Server : public raft::Callbacks,
 
   std::vector<std::shared_ptr<Session> > peers_;
 
+  std::shared_ptr<Session> accepting_client_session_;
+  std::shared_ptr<Session> accepting_peer_session_;
   std::unordered_map<std::string, std::shared_ptr<Session> > all_clients_;
-  std::map<raft::EntryInfo, std::string> waiting_clients_;
 
   ::asio::high_resolution_timer timer_;
   ::asio::high_resolution_timer minimum_timer_;
@@ -69,6 +80,8 @@ class Server : public raft::Callbacks,
   raft::Server raft_server_;
   uint64_t next_id_;
   bool stop_;
+
+  uint64_t watermark_index_;
 };
 }
 }

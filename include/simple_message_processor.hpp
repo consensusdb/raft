@@ -15,7 +15,6 @@ class PeerMessageProcessor : public network::MessageProcessor {
   std::string serialize(raft::RPC::AppendEntriesResponse request) const;
   std::string serialize(raft::RPC::VoteRequest request) const;
   std::string serialize(raft::RPC::VoteResponse request) const;
-
  private:
   void process_message(std::string &id, std::string message,
                        raft::Server &server);
@@ -31,8 +30,10 @@ class ClientMessageProcessor : public network::MessageProcessor {
                                  raft::Server &server);
 
   std::string serialize(raft::RPC::ClientRequest request) const;
-  std::string serialize(raft::RPC::ClientResponse request) const;
-
+  std::string serialize(raft::RPC::ClientResponse response) const;
+  std::string serialize(raft::RPC::LocalFailureResponse response) const;
+  std::string serialize(raft::RPC::NotLeaderResponse response) const;
+  std::string serialize(raft::RPC::CurrentEntryResponse response) const;
  private:
   void process_message(std::string &id, std::string message,
                        raft::Server &server);

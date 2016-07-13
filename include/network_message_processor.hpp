@@ -54,7 +54,20 @@ class MessageProcessor {
     throw MessageProcessorException("ClientResponse not implemented");
   }
 
-  inline virtual ~MessageProcessor() {}
+  virtual std::string serialize(raft::RPC::LocalFailureResponse) const {
+    throw MessageProcessorException("LocalFailureResponse not implemented");
+  }
+
+  virtual std::string serialize(raft::RPC::NotLeaderResponse) const {
+    throw MessageProcessorException("NotLeaderResponse not implemented");
+  }
+
+  virtual std::string serialize(raft::RPC::CurrentEntryResponse) const {
+    throw MessageProcessorException("CurrentEntryResponse not implemented");
+  }
+
+  virtual ~MessageProcessor() {
+  }
 };
 
 // since the server takes requests from clients and peers, we need 2 different
