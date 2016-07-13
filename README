@@ -3,13 +3,13 @@ libraft is a C++ (C++14) implementation of the raft concensus algorithm.
 The goal is to provide a minimal implementation of the raft concensus algorithm. Any part of raft that isn't core to how raft builds concensus will have a well documented abstract interface that you can implement to meet your specific needs. Sample implementations of the abstract interfaces will be provided. The abstract interfaces are the following:
 
 Networking with implementations using libuv and asio.
-Storage with implementations using sqlite3 and std::vector
+Storage using a file and an std::vector (I implemented an sqlite3 storage backend put performance was abysmal)
 Serialization with implementations using http-parser and std::istream/std::ostream.
 
 TODO:
 libuv based networking
-sqlite3 based storage
 http based serialization
+make file fsync cross-platform
 
 MATURITY PHASES:
 phase 0: libraft supports a static set of nodes, and has 2 sample implementations per abstract interface
