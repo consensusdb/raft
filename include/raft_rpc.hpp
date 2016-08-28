@@ -98,6 +98,7 @@ struct ConfigChangeRequest {
   uint64_t leader_commit;
   uint64_t index;
   std::vector<PeerConfig> peer_configs;
+  uint64_t request_watermark;
 };
 
 }

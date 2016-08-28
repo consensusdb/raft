@@ -1,12 +1,12 @@
 #include <mem_storage.hpp>
 #include <raft.hpp>
 #include <algorithm>
-#include <fstream>
+#include <sstream>
 #include <simple_serialize.hpp>
 
 namespace avery {
 
-MemStorage::MemStorage(const char *  filename) : raft::Storage(), current_term_(0), last_entry_info_{0,0}, commit_info_{0,0}, log_file_(filename, std::ios::app) {
+MemStorage::MemStorage(const char *  filename) : raft::Storage(), current_term_(0), last_entry_info_{0,0}, commit_info_{0,0}, log_file_(filename) {
 }
 
 uint64_t MemStorage::append(const std::vector<raft::Entry> &entries) {
@@ -22,10 +22,12 @@ uint64_t MemStorage::append(const std::vector<raft::Entry> &entries) {
   }
   entries_.insert(entries_.end(), entries.begin(), entries.end());
 
-  std::for_each(entries.begin(), entries.end(), [this](auto &entry) {
-    log_file_ << "E " << entry.info.index << " " << entry.data << "\n";
+  std::ostringstream oss;
+  std::for_each(entries.begin(), entries.end(), [this, &oss](auto &entry) {
+    oss << "E " << entry.info.index << " " << entry.data << "\n";
   });
-  log_file_ << std::flush;
+  std::string temp(oss.str());
+  log_file_.write(temp.c_str(), temp.size());
   last_entry_info_ = entries.back().info;
   return last_entry_info_.index;
 }
@@ -34,7 +36,10 @@ void MemStorage::voted_for(std::string id) {
   if ( voted_for_ == id ) {
     return;
   }
-  log_file_ << "V " << id << "\n" << std::flush;
+  std::ostringstream oss;
+  oss << "C " << id << "\n";
+  std::string temp(oss.str());
+  log_file_.write(temp.c_str(), temp.size());
   voted_for_ = id; 
 }
 
@@ -42,16 +47,22 @@ void MemStorage::current_term(uint64_t current_term) {
   if ( current_term_ == current_term ) {
     return;
   }
-  log_file_ << "T " << current_term << "\n" << std::flush;
+  std::ostringstream oss;
+  oss << "T " << current_term << "\n";
+  std::string temp(oss.str());
+  log_file_.write(temp.c_str(), temp.size());
   current_term_ = current_term;
 }
 
 uint64_t MemStorage::commit_until(uint64_t commit_index) {
-  commit_index = std::min(last_entry_info_.index, commit_index);
+  commit_index = min(last_entry_info_.index, commit_index);
   if ( commit_info_.index == commit_index ) {
     return commit_info_.index;
   }
-  log_file_ << "C " << commit_index << "\n" << std::flush;
+  std::ostringstream oss;
+  oss << "C " << commit_index << "\n";
+  std::string temp(oss.str());
+  log_file_.write(temp.c_str(), temp.size());
   commit_info_ = get_entry_info(commit_index);
   return commit_info_.index;
 }

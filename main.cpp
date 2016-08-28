@@ -79,7 +79,7 @@ int main() {
     }
   };
 
-  shark_attack.async_wait(on_shark_attack);
+  //shark_attack.async_wait(on_shark_attack);
 
   io_service.run();
   return 0;

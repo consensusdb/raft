@@ -58,8 +58,8 @@ struct State {
   std::string leader_id;
   PeerInfo known_peers;
 
-  std::vector<std::string> cluster_new;
-  std::vector<std::string> cluster_old;
+  PeerInfo cluster_new;
+  PeerInfo cluster_old;
 
   bool minimum_timeout_reached;
 };

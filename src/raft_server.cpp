@@ -339,7 +339,16 @@ void Server::timeout() {
 }
   
 void Server::on(const std::string &, RPC::ConfigChangeRequest request) {
-  raft::PeerInfo known_peers;
+  if ( state.cluster_old.empty() ) {
+    state.cluster_old = state.known_peers;
+  }
+  state.cluster_new = request.peer_configs;
+  state.cluster_old
+  if(state.new_peers.empty()) {
+    //this is phase 2 where we swap out the old peers with the new peers
+  } else {
+    state.new_peers = request.peer_configs;
+  }
 }
 
 void Server::step_down(uint64_t new_term) {
