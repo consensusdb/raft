@@ -6,8 +6,9 @@
 
 namespace avery {
 
-class PeerMessageProcessor : public network::MessageProcessor {
+class MessageProcessor : public network::MessageProcessor {
  public:
+  MessageProcessor(network::MessageCategory category);
   network::buffer_t process_read(std::string &id, size_t bytes_recieved,
                                  raft::Server &server);
 
@@ -15,19 +16,6 @@ class PeerMessageProcessor : public network::MessageProcessor {
   std::string serialize(raft::RPC::AppendEntriesResponse request) const;
   std::string serialize(raft::RPC::VoteRequest request) const;
   std::string serialize(raft::RPC::VoteResponse request) const;
- private:
-  void process_message(std::string &id, std::string message,
-                       raft::Server &server);
-
-  enum { max_length = 64 * 1024 };
-  char data_[max_length];
-  std::string incomplete_message_;
-};
-
-class ClientMessageProcessor : public network::MessageProcessor {
- public:
-  network::buffer_t process_read(std::string &id, size_t bytes_recieved,
-                                 raft::Server &server);
 
   std::string serialize(raft::RPC::ClientRequest request) const;
   std::string serialize(raft::RPC::ClientResponse response) const;
@@ -37,22 +25,23 @@ class ClientMessageProcessor : public network::MessageProcessor {
  private:
   void process_message(std::string &id, std::string message,
                        raft::Server &server);
+  void process_server_message(std::string &id, std::string message,
+                       raft::Server &server);
+  void process_client_message(std::string &id, std::string message,
+                       raft::Server &server);
 
   enum { max_length = 64 * 1024 };
   char data_[max_length];
   std::string incomplete_message_;
+  network::MessageCategory category_;
 };
 
 class MyMessageProcessoryFactory : public network::MessageProcessorFactory {
  public:
-  std::unique_ptr<network::MessageProcessor> peer() const {
+  std::unique_ptr<network::MessageProcessor> operator()(network::MessageCategory category) const {
     return std::unique_ptr<network::MessageProcessor>(
-        new PeerMessageProcessor{});
-  }
-
-  std::unique_ptr<network::MessageProcessor> client() const {
-    return std::unique_ptr<network::MessageProcessor>(
-        new ClientMessageProcessor{});
+        new MessageProcessor{category});
   }
 };
+
 }

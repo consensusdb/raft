@@ -147,7 +147,7 @@ void Server::do_accept_peer() {
   oss << "+" << ++next_id_;
 
   accepting_peer_session_ = std::make_shared<Session>(self, tcp::socket(io_service_),
-                                                      message_factory_.peer(), oss.str());
+                                                      message_factory_(MessageCategory::Server), oss.str());
 
   acceptor_.async_accept(accepting_peer_session_->socket(),
                          [this, self](std::error_code ec) {
@@ -171,7 +171,7 @@ void Server::do_accept_client() {
   std::ostringstream oss;
   oss << "-" << ++next_id_;
   accepting_client_session_ = std::make_shared<Session>(
-    self, tcp::socket(io_service_), message_factory_.client(), oss.str());
+    self, tcp::socket(io_service_), message_factory_(MessageCategory::Client), oss.str());
   client_acceptor_.async_accept(
     accepting_client_session_->socket(), [this, self](std::error_code ec) {
     if ( stop_ ) {
@@ -211,7 +211,7 @@ void Server::session_send(const std::string &id, M message) {
     auto &peer = *raft_server().state.find_peer(id);
     auto self = shared_from_this();
     auto session = std::make_shared<Session>(self, tcp::socket(io_service_),
-                                             message_factory_.peer(), id);
+                                             message_factory_(MessageCategory::Server), id);
     auto shared_message = std::make_shared<M>(std::move(message));
     tcp::endpoint endpoint(
         ::asio::ip::address::from_string(peer.ip_port.ip.c_str()),

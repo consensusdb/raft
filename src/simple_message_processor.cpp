@@ -36,42 +36,55 @@ void newline_tokenizer(char *begin, char *buffer_end,
 
 namespace avery {
 
-network::buffer_t PeerMessageProcessor::process_read(std::string &id,
+  MessageProcessor::MessageProcessor(network::MessageCategory category): network::MessageProcessor{},
+    category_(category) {
+  }
+
+network::buffer_t MessageProcessor::process_read(std::string &id,
                                                      size_t bytes_recieved,
                                                      raft::Server &server) {
   newline_tokenizer(
       data_, data_ + bytes_recieved, incomplete_message_,
-      std::bind(&PeerMessageProcessor::process_message, this, std::ref(id),
+      std::bind(&MessageProcessor::process_message, this, std::ref(id),
                 std::placeholders::_1, std::ref(server)));
   return {data_, max_length};
 }
 
-std::string PeerMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
     raft::RPC::AppendEntriesRequest request) const {
   std::ostringstream oss;
   oss << request;
   return oss.str();
 }
-std::string PeerMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
     raft::RPC::AppendEntriesResponse request) const {
   std::ostringstream oss;
   oss << request;
   return oss.str();
 }
-std::string PeerMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
     raft::RPC::VoteRequest request) const {
   std::ostringstream oss;
   oss << request;
   return oss.str();
 }
-std::string PeerMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
     raft::RPC::VoteResponse request) const {
   std::ostringstream oss;
   oss << request;
   return oss.str();
 }
 
-void PeerMessageProcessor::process_message(std::string &id, std::string message,
+void MessageProcessor::process_message(std::string &id, std::string message,
+                                           raft::Server &server) {
+  if(category_ == network::MessageCategory::Client) {
+    process_client_message(id, std::move(message), server);
+  } else {
+    process_server_message(id, std::move(message), server);
+  }
+}
+
+void MessageProcessor::process_server_message(std::string &id, std::string message,
                                            raft::Server &server) {
   std::istringstream s(std::move(message));
   s.exceptions(std::istringstream::failbit | std::istringstream::badbit);
@@ -124,50 +137,40 @@ void PeerMessageProcessor::process_message(std::string &id, std::string message,
   }
 }
 
-network::buffer_t ClientMessageProcessor::process_read(std::string &id,
-                                                       size_t bytes_recieved,
-                                                       raft::Server &server) {
-  newline_tokenizer(
-      data_, data_ + bytes_recieved, incomplete_message_,
-      std::bind(&ClientMessageProcessor::process_message, this, std::ref(id),
-                std::placeholders::_1, std::ref(server)));
-  return {data_, max_length};
-}
-
-std::string ClientMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
     raft::RPC::ClientRequest request) const {
   std::ostringstream oss;
   oss << request;
   return oss.str();
 }
-std::string ClientMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
     raft::RPC::ClientResponse response) const {
   std::ostringstream oss;
   oss << response;
   return oss.str();
 }
 
-std::string ClientMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
   raft::RPC::LocalFailureResponse response) const {
   std::ostringstream oss;
   oss << response;
   return oss.str();
 }
 
-std::string ClientMessageProcessor::serialize(
+std::string MessageProcessor::serialize(
   raft::RPC::NotLeaderResponse response) const {
   std::ostringstream oss;
   oss << response;
   return oss.str();
 }
 
-std::string ClientMessageProcessor::serialize(raft::RPC::CurrentEntryResponse response) const {
+std::string MessageProcessor::serialize(raft::RPC::CurrentEntryResponse response) const {
   std::ostringstream oss;
   oss << response;
   return oss.str();
 }
 
-void ClientMessageProcessor::process_message(std::string &id,
+void MessageProcessor::process_client_message(std::string &id,
                                              std::string message,
                                              raft::Server &server) {
   std::istringstream s(std::move(message));

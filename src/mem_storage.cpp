@@ -10,7 +10,6 @@ MemStorage::MemStorage(const char *  filename) : raft::Storage(), current_term_(
 }
 
 uint64_t MemStorage::append(const std::vector<raft::Entry> &entries) {
-  int ret = 0;
   if(entries.empty()) {
     return last_entry_info_.index;
   }

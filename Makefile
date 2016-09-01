@@ -1,4 +1,4 @@
-CPPFLAGS=-std=c++14 -Wall -Wextra -Werror -g -fno-omit-frame-pointer -Iinclude -I../asio-1.11.0/include -DASIO_STANDALONE -Wno-unused-local-typedef -Wno-reorder
+CPPFLAGS=-std=c++14 -Wall -Wextra -Werror -g -fno-omit-frame-pointer -Iinclude -I../asio-1.10.6/include -DASIO_STANDALONE -Wno-unused-local-typedef -Wno-reorder
 
 LIBS= -lpthread
 OBJ=$(patsubst %.cpp,%.o,$(wildcard src/*cpp) main.cpp)

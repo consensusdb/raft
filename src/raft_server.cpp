@@ -101,7 +101,6 @@ void Server::on(const std::string &, RPC::AppendEntriesRequest request) {
   }
   RPC::AppendEntriesResponse response = {state.id, request.peer_id,
                                          storage->current_term(), false, 0, request.request_watermark };
-  auto size = request.entries.size();
   if (request.term < storage->current_term()) {
     callbacks.send(request.peer_id, std::move(response));
     return;
@@ -338,8 +337,7 @@ void Server::timeout() {
   }
 }
   
-void Server::on(const std::string &, RPC::ConfigChangeRequest request) {
-  raft::PeerInfo known_peers;
+void Server::on(const std::string &, RPC::ConfigChangeRequest /*request*/) {
 }
 
 void Server::step_down(uint64_t new_term) {

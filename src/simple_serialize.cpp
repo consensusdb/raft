@@ -92,7 +92,7 @@ std::ostream &operator<<(std::ostream &os,
 }
 
 std::ostream &operator<<(std::ostream &os,
-                         const raft::RPC::LocalFailureResponse &response) {
+                         const raft::RPC::LocalFailureResponse &/*response*/) {
   return os << "LocalFailureResponse \n";
 }
 

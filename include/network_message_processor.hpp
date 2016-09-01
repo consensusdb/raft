@@ -25,46 +25,26 @@ struct buffer_t {
   char* ptr;
   size_t size;
 };
+
+enum MessageCategory {
+  Client,
+  Server
+};
+
 class MessageProcessor {
  public:
   virtual buffer_t process_read(std::string& id, size_t bytes_recieved,
                                 raft::Server& server) = 0;
 
-  virtual std::string serialize(raft::RPC::AppendEntriesRequest) const {
-    throw MessageProcessorException("AppendEntriesRequest not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::AppendEntriesResponse) const {
-    throw MessageProcessorException("AppendEntriesResponse not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::VoteRequest) const {
-    throw MessageProcessorException("VoteRequest not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::VoteResponse) const {
-    throw MessageProcessorException("VoteResponse not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::ClientRequest) const {
-    throw MessageProcessorException("ClientRequest not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::ClientResponse) const {
-    throw MessageProcessorException("ClientResponse not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::LocalFailureResponse) const {
-    throw MessageProcessorException("LocalFailureResponse not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::NotLeaderResponse) const {
-    throw MessageProcessorException("NotLeaderResponse not implemented");
-  }
-
-  virtual std::string serialize(raft::RPC::CurrentEntryResponse) const {
-    throw MessageProcessorException("CurrentEntryResponse not implemented");
-  }
+  virtual std::string serialize(raft::RPC::AppendEntriesRequest) const = 0;
+  virtual std::string serialize(raft::RPC::AppendEntriesResponse) const = 0;
+  virtual std::string serialize(raft::RPC::VoteRequest) const = 0;
+  virtual std::string serialize(raft::RPC::VoteResponse) const = 0;
+  virtual std::string serialize(raft::RPC::ClientRequest) const = 0;
+  virtual std::string serialize(raft::RPC::ClientResponse) const = 0;
+  virtual std::string serialize(raft::RPC::LocalFailureResponse) const = 0;
+  virtual std::string serialize(raft::RPC::NotLeaderResponse) const = 0;
+  virtual std::string serialize(raft::RPC::CurrentEntryResponse) const = 0;
 
   virtual ~MessageProcessor() {
   }
@@ -74,8 +54,7 @@ class MessageProcessor {
 // message parsers.
 class MessageProcessorFactory {
  public:
-  virtual std::unique_ptr<network::MessageProcessor> peer() const = 0;
-  virtual std::unique_ptr<network::MessageProcessor> client() const = 0;
+  virtual std::unique_ptr<network::MessageProcessor> operator()(MessageCategory category) const = 0;
   inline virtual ~MessageProcessorFactory() {}
 };
 }
