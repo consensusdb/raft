@@ -14,7 +14,7 @@
 namespace raft {
 
 void Server::on(RPC::TimeoutRequest) {
-  std::cout << state.id << " is a candidate" << std::endl;
+  std::cout << time(NULL) << " " << state.id << " is a candidate for term " << storage->current_term()+1 << std::endl;
   // set role to candidate
   state.role = State::Role::Candidate;
 
@@ -31,12 +31,14 @@ void Server::on(RPC::TimeoutRequest) {
 
   // return messages
   auto info = storage->get_last_entry_info();
-  RPC::VoteRequest vote_req = {state.id, "", storage->current_term(), state.id,
+  RPC::VoteRequest vote_req = {state.id, "", 0, storage->current_term(), state.id,
                                info.index, info.term};
   std::for_each(state.known_peers.begin(), state.known_peers.end(),
                 [&](auto &peer) {
                   if (peer.id != state.id) {
                     vote_req.destination_id = peer.id;
+                    vote_req.message_id = ++peer.last_message_id;
+                    peer.waiting_for_response = true;
                     callbacks.send(peer.id, vote_req);
                   }
                 });
@@ -51,18 +53,22 @@ void Server::on(RPC::TimeoutRequest) {
 void Server::on(RPC::HeartbeatRequest) {
   std::for_each(
       state.known_peers.begin(), state.known_peers.end(), [&](auto &peer) {
-        if (peer.id != state.id) {
-          RPC::AppendEntriesRequest ret;
-          ret.peer_id = state.id;
-          ret.destination_id = peer.id;
-          ret.leader_commit = storage->last_commit().index;
-          ret.term = storage->current_term();
-          ret.prev_log_index = peer.match_index;
-          ret.prev_log_term = storage->get_entry_info(ret.prev_log_index).term;
-          ret.request_watermark = peer.request_watermark;
-          ret.entries = {};
-          callbacks.send(peer.id, ret);
-        }
+        if (peer.id == state.id || peer.waiting_for_response) {
+          //don't send a heartbeat to self or to a node that hasn't sent a
+          //response to a previous RPC back.
+          return;
+       }
+       peer.waiting_for_response = true;
+       RPC::AppendEntriesRequest ret;
+       ret.peer_id = state.id;
+       ret.destination_id = peer.id;
+       ret.message_id = ++peer.last_message_id;
+       ret.leader_commit = storage->last_commit().index;
+       ret.term = storage->current_term();
+       ret.prev_log_index = peer.match_index;
+       ret.prev_log_term = storage->get_entry_info(ret.prev_log_index).term;
+       ret.entries = {};
+       callbacks.send(peer.id, ret);
       });
   callbacks.set_heartbeat_timeout();
 }
@@ -76,20 +82,28 @@ void Server::on(const std::string &, RPC::VoteRequest request) {
   if (request.term > storage->current_term()) {
     step_down(request.term);
   }
-  RPC::VoteResponse ret = {state.id, request.peer_id, storage->current_term(),
+  RPC::VoteResponse ret = {state.id, request.peer_id, request.message_id, storage->current_term(),
                            false};
   if (state.minimum_timeout_reached &&
       request.term >= storage->current_term() &&
       (storage->voted_for().empty() ||
        storage->voted_for() == request.candidate_id) &&
       request.last_log_index >= storage->get_last_entry_info().index) {
-    ret = {state.id, request.peer_id, request.term, true};
+    ret = {state.id, request.peer_id, request.message_id, request.term, true};
     storage->voted_for(request.candidate_id);
     state.leader_id = request.candidate_id;
   }
 
   if (ret.vote_granted == true) {
     callbacks.set_vote_timeout();
+  } else {
+    //if the leader recieves a vote request, it could be because the node crashed during an RPC request and failed to send
+    //a response. In such a case we want to reset the status of the node so that it isn't waiting for a response and can
+    //recieve updates
+    if (state.role == raft::State::Role::Leader) {
+      auto *peer = state.find_peer(request.peer_id);
+      peer->waiting_for_response = false;
+    }
   }
   callbacks.send(request.peer_id, std::move(ret));
 }
@@ -99,8 +113,8 @@ void Server::on(const std::string &, RPC::AppendEntriesRequest request) {
     callbacks.drop(request.peer_id);
     return;
   }
-  RPC::AppendEntriesResponse response = {state.id, request.peer_id,
-                                         storage->current_term(), false, 0, request.request_watermark };
+  RPC::AppendEntriesResponse response = {state.id, request.peer_id, request.message_id,
+                                         storage->current_term(), false, 0 };
   if (request.term < storage->current_term()) {
     callbacks.send(request.peer_id, std::move(response));
     return;
@@ -132,7 +146,7 @@ void Server::on(const std::string &, RPC::AppendEntriesRequest request) {
     }
   }
   if ( response.success == false ) {
-    std::cout << state.id << " " << request.request_watermark << " EntryRequest after I" << request.prev_log_index << " T" << request.prev_log_term << " now at I" << storage->get_last_entry_info().index << " commit at I" << storage->last_commit().index << " T" << storage->last_commit().term << std::endl;
+    std::cout << state.id << " EntryRequest after I" << request.prev_log_index << " T" << request.prev_log_term << " now at I" << storage->get_last_entry_info().index << " commit at I" << storage->last_commit().index << " T" << storage->last_commit().term << std::endl;
   }
 
   if (response.term == request.term) {
@@ -144,18 +158,28 @@ void Server::on(const std::string &, RPC::AppendEntriesRequest request) {
 }
 
 void Server::on(const std::string &, RPC::VoteResponse response) {
-  if (response.destination_id != state.id) {
-    callbacks.drop(response.peer_id);
+  auto *peer = state.find_peer(response.peer_id);
+  if (response.destination_id != state.id || 
+      peer == nullptr || 
+      peer->waiting_for_response == false) {
+    if(peer->last_message_id >= response.message_id) {
+      //it's pretty common that an old vote response comes in after a heartbeat was sent to claim the leadership.
+      //Instead of dropping the connection we just ignore the message as it's harmless and an artifact of 
+      //network latency
+      callbacks.drop(response.peer_id);
+    }
     return;
   }
+
   if (response.term > storage->current_term()) {
     step_down(response.term);
   }
+
   if (state.role == State::Role::Candidate &&
       response.term == storage->current_term()) {
     if (response.vote_granted) {
       // add vote
-      state.find_peer(response.peer_id)->voted_for_me = true;
+      peer->voted_for_me = true;
       size_t num_votes =
           std::count_if(state.known_peers.begin(), state.known_peers.end(),
                         [](auto &peer) { return peer.voted_for_me; });
@@ -165,16 +189,7 @@ void Server::on(const std::string &, RPC::VoteResponse response) {
         state.leader_id = state.id;
 
         auto info = storage->get_last_entry_info();
-
-        std::for_each(state.known_peers.begin(), state.known_peers.end(),
-                      [&](auto &peer) {
-                        peer.next_index = info.index + 1;
-                        peer.match_index = 0;
-                        if ( peer.id == state.id ) {
-                          peer.match_index = info.index;
-                        }
-                      });
-
+        
         RPC::AppendEntriesRequest request;
         request.peer_id = state.id;
         request.leader_commit = storage->last_commit().index;
@@ -185,9 +200,14 @@ void Server::on(const std::string &, RPC::VoteResponse response) {
 
         std::for_each(state.known_peers.begin(), state.known_peers.end(),
                       [&](auto &peer) {
-                        if (peer.id != state.id) {
+                        peer.waiting_for_response = true;
+                        peer.next_index = info.index + 1;
+                        peer.match_index = 0;
+                        if ( peer.id == state.id ) {
+                          peer.match_index = info.index;
+                        } else {
                           request.destination_id = peer.id;
-                          request.request_watermark = peer.request_watermark;
+                          request.message_id = ++peer.last_message_id;
                           callbacks.send(peer.id, request);
                         }
                       });
@@ -200,10 +220,16 @@ void Server::on(const std::string &, RPC::VoteResponse response) {
 }
 
 void Server::on(const std::string &, RPC::AppendEntriesResponse response) {
-  if ( response.destination_id != state.id ) {
+  auto *peer = state.find_peer(response.peer_id);
+  if (response.destination_id != state.id || 
+      peer == nullptr || 
+      peer->waiting_for_response == false ||
+      peer->last_message_id != response.message_id) {
     callbacks.drop(response.peer_id);
     return;
   }
+  peer->waiting_for_response = false;
+
   if ( response.term > storage->current_term() ) {
     step_down(response.term);
   } else if ( response.term < storage->current_term() ) {
@@ -214,36 +240,32 @@ void Server::on(const std::string &, RPC::AppendEntriesResponse response) {
   if ( state.role != State::Role::Leader ) {
     return;
   }
-  auto &peer = *state.find_peer(response.peer_id);
 
   if ( response.success == false ) {
-    if ( response.request_watermark < peer.request_watermark ) {
-      std::cout << "discarding old request" << std::endl;
-      return;
+    peer->next_index -= 1;
+    if ( peer->next_index == 0 ) {
+      peer->next_index = 1;
     }
-    peer.next_index -= 1;
-    if ( peer.next_index == 0 ) {
-      peer.next_index = 1;
-    }
-    std::cout << "Peer " << response.peer_id << " failure term " << response.term << " (leader term " << storage->current_term() << ") next index set to " << peer.next_index << std::endl;
+    std::cout << "Peer " << response.peer_id << " failure term " << response.term << " (leader term " << storage->current_term() << ") next index set to " << peer->next_index << std::endl;
 
     RPC::AppendEntriesRequest request;
+    peer->waiting_for_response = true;
     request.peer_id = state.leader_id;
     request.destination_id = response.peer_id;
+    request.message_id = ++peer->last_message_id;
     request.leader_commit = storage->last_commit().index;
     request.term = storage->current_term();
-    request.prev_log_index = peer.next_index - 1;
+    request.prev_log_index = peer->next_index - 1;
     request.prev_log_term =
       storage->get_entry_info(request.prev_log_index).term;
     request.entries = storage->entries_since(request.prev_log_index);
-    request.request_watermark = ++peer.request_watermark;
     callbacks.send(response.peer_id, std::move(request));
     return;
-  } else if ( peer.match_index < response.match_index ) {
+  } else if ( peer->match_index < response.match_index ) {
     // the match_index in the response doesn't correspond to what the leader
     // has observed so there's potential to commit
-    peer.next_index = std::max(peer.next_index, response.match_index + 1);
-    peer.match_index = response.match_index;
+    peer->next_index = std::max(peer->next_index, response.match_index + 1);
+    peer->match_index = response.match_index;
     std::vector<uint64_t> indexes;
     indexes.reserve(state.known_peers.size());
     
@@ -269,11 +291,10 @@ void Server::on(const std::string &, RPC::ClientRequest request) {
   if (state.role != State::Role::Leader) {
     auto *leader = state.find_peer(state.leader_id);
     if(leader == nullptr) {
+      //if no leader is available, send self
       leader = state.find_peer(state.id);
     }
     RPC::NotLeaderResponse ret = {
-      state.id,
-      request.client_id,
       leader->id,
       leader->ip_port
     };
@@ -282,13 +303,13 @@ void Server::on(const std::string &, RPC::ClientRequest request) {
   }
     uint64_t new_index = storage->get_last_entry_info().index + 1;
     // commit locally
-    RPC::ClientResponse ret = {{new_index, storage->current_term()}};
+    RPC::ClientResponse ret = {request.message_id, {new_index, storage->current_term()}};
     // storage->append is blocking -- make sure it doesn't take too long!
     // The length of time spent here is the amount of time to write to disk.
     // If append does more IO than a simple sequential write to disk you
     // are not using this tool correctly.
     if (storage->append({{ret.entry_info, request.data}}) != new_index) {
-      callbacks.client_send(request.client_id, RPC::LocalFailureResponse{});
+      //TODO abort?
       return;
     }
     
@@ -307,16 +328,20 @@ void Server::on(const std::string &, RPC::ClientRequest request) {
             peer.next_index = new_index + 1;
             return;
           }
-          if ( peer.next_index != new_index ) {
+
+          if ( peer.next_index != new_index  || peer.waiting_for_response) {
             return; //Don't send more requests to a peer that's not up-to-date
           }
+
+          req.message_id = ++peer.last_message_id;
+          peer.waiting_for_response = true;
+
           req.destination_id = peer.id;
           if ( req.prev_log_index != peer.next_index - 1 ) {
             req.prev_log_index = peer.next_index - 1;
             req.prev_log_term = storage->get_entry_info(req.prev_log_index).term;
             req.entries = storage->entries_since(req.prev_log_index);
           }
-          req.request_watermark = peer.request_watermark;
           if ( peer.next_index == new_index ) {
             peer.next_index++;
           }

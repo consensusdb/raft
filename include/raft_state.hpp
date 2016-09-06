@@ -15,16 +15,22 @@ struct peer_info_t {
         id(std::move(id)),
         next_index(1),
         match_index(0),
+        last_message_id(0),
         voted_for_me(false),
-        request_watermark(0) {}
+        waiting_for_response(false) {}
 
-  void reset() { voted_for_me = false; }
+  void reset() { 
+    voted_for_me = false; 
+    ++last_message_id;
+    waiting_for_response = false;
+  }
   ip_port_t ip_port;
   std::string id;
   uint64_t next_index;
   uint64_t match_index;
+  uint64_t last_message_id;
   bool voted_for_me;
-  uint64_t request_watermark;
+  bool waiting_for_response;
 };
 
 // because the number of peers
@@ -58,13 +64,14 @@ struct State {
   std::string leader_id;
   PeerInfo known_peers;
 
-  std::vector<std::string> cluster_new;
-  std::vector<std::string> cluster_old;
+  PeerInfo cluster_new;
+  PeerInfo cluster_old;
 
   bool minimum_timeout_reached;
 };
 }
 
+//helper
 inline std::ostream& operator<<(std::ostream& os, raft::State::Role& role) {
   switch (role) {
     case (raft::State::Role::Candidate):

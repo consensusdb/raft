@@ -1,4 +1,6 @@
+#pragma once
 #include <raft_rpc.hpp>
+
 namespace raft {
 class Callbacks {
  public:
@@ -18,8 +20,6 @@ class Callbacks {
                     const raft::RPC::ClientResponse& response) = 0;
   virtual void client_send(const std::string& peer_id,
                            const raft::RPC::NotLeaderResponse& response) = 0;
-  virtual void client_send(const std::string& peer_id,
-                           const raft::RPC::LocalFailureResponse& response) = 0;
   virtual void client_send(const std::string& peer_id,
                            const raft::RPC::CurrentEntryResponse& response) = 0;
 

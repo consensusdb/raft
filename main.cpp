@@ -52,25 +52,25 @@ int main() {
         if ( is_server_on[idx] ) {
           bool killing_leader = (server->raft_server().state.role == raft::State::Role::Leader);
           size_t servers_running = (std::count(is_server_on.begin(), is_server_on.end(), true)-1);
-          std::cout << "><(((('> shark attack on " << server->raft_server().state.id << " OFF,"
+          std::cout << time(NULL) <<  " ><(((('> shark attack on " << server->raft_server().state.id << " OFF,"
             << servers_running << "/" << is_server_on.size() << std::endl;
           server->stop();
           if ( servers_running < (1 + (is_server_on.size() / 2)) ) {
             quorum_broken = true;
-            std::cout << "><(((('> shark attack quorum is broken no leader should be elected" << std::endl;
+            std::cout << time(NULL) << " ><(((('> shark attack quorum is broken no leader should be elected" << std::endl;
           } else if ( killing_leader ) {
-            std::cout << "><(((('> shark attack new leader will be elected" << std::endl;
+            std::cout << time(NULL) << " ><(((('> shark attack new leader will be elected" << std::endl;
           }
           is_server_on[idx] = !is_server_on[idx];
         }
       } else if ( !is_server_on[idx] ) {
         size_t servers_running = (std::count(is_server_on.begin(), is_server_on.end(), true)+1);
-        std::cout << "><(((('> shark attack on " << server->raft_server().state.id << " ON,"
+        std::cout << time(NULL) << " ><(((('> shark attack on " << server->raft_server().state.id << " ON,"
           << servers_running << "/" << is_server_on.size() << std::endl;
         server->start();
         if ( ( servers_running >= (1 + (is_server_on.size() / 2))) && quorum_broken) {
           quorum_broken = false;
-          std::cout << "><(((('> shark attack quorum possible again, a new leader will be elected" << std::endl;
+          std::cout << time(NULL) << " ><(((('> shark attack quorum possible again, a new leader will be elected" << std::endl;
         }
         is_server_on[idx] = !is_server_on[idx];
       }
@@ -79,7 +79,7 @@ int main() {
     }
   };
 
-  shark_attack.async_wait(on_shark_attack);
+  //shark_attack.async_wait(on_shark_attack);
 
   io_service.run();
   return 0;

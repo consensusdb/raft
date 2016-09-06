@@ -1,4 +1,5 @@
 #pragma once
+//convenient header that adds all the required raft headers
 
 #include <raft_rpc.hpp>  //structs that represent the RPC requests and responses
 #include <raft_entry.hpp>  //structs that represent an entry

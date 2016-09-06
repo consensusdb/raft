@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -12,26 +13,27 @@ namespace RPC {
 struct AppendEntriesRequest {
   std::string peer_id;  // also leader_id
   std::string destination_id;
+  uint64_t message_id;
   uint64_t term;
   uint64_t prev_log_index;
   uint64_t prev_log_term;
   uint64_t leader_commit;
   std::vector<Entry> entries;
-  uint64_t request_watermark;
 };
 
 struct AppendEntriesResponse {
   std::string peer_id;
   std::string destination_id;
+  uint64_t message_id;
   uint64_t term;
   bool success;
   uint64_t match_index;
-  uint64_t request_watermark;
 };
 
 struct VoteRequest {
   std::string peer_id;
   std::string destination_id;
+  uint64_t message_id;
   uint64_t term;
   std::string candidate_id;
   uint64_t last_log_index;
@@ -41,6 +43,7 @@ struct VoteRequest {
 struct VoteResponse {
   std::string peer_id;
   std::string destination_id;
+  uint64_t message_id;
   uint64_t term;
   bool vote_granted;
 };
@@ -56,22 +59,21 @@ struct MinimumTimeoutRequest {};
 
 struct ClientRequest {
   std::string client_id;
+  std::string message_id;
   std::string data;
 };
 
 struct ClientResponse {
+  std::string message_id;
   EntryInfo entry_info;
 };
 
 struct NotLeaderResponse {
-  std::string peer_id;
-  std::string client_id;
   std::string leader_id;
   ip_port_t leader_info;
 };
 
 struct LocalFailureResponse {
-
 };
 
 struct CurrentEntryRequest {
@@ -98,6 +100,7 @@ struct ConfigChangeRequest {
   uint64_t leader_commit;
   uint64_t index;
   std::vector<PeerConfig> peer_configs;
+  uint64_t request_watermark;
 };
 
 }
