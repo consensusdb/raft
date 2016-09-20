@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <list>
 #include <string>
-#include <simple_serialize.hpp>
 #include <sstream>
 #include <functional>
 
@@ -42,7 +41,7 @@ namespace avery {
 
 network::buffer_t MessageProcessor::process_read(std::string &id,
                                                      size_t bytes_recieved,
-                                                     raft::Server &server) {
+                                                     raft::Server<std::string> &server) {
   newline_tokenizer(
       data_, data_ + bytes_recieved, incomplete_message_,
       std::bind(&MessageProcessor::process_message, this, std::ref(id),
@@ -50,33 +49,8 @@ network::buffer_t MessageProcessor::process_read(std::string &id,
   return {data_, max_length};
 }
 
-std::string MessageProcessor::serialize(
-    raft::RPC::AppendEntriesRequest request) const {
-  std::ostringstream oss;
-  oss << request;
-  return oss.str();
-}
-std::string MessageProcessor::serialize(
-    raft::RPC::AppendEntriesResponse request) const {
-  std::ostringstream oss;
-  oss << request;
-  return oss.str();
-}
-std::string MessageProcessor::serialize(
-    raft::RPC::VoteRequest request) const {
-  std::ostringstream oss;
-  oss << request;
-  return oss.str();
-}
-std::string MessageProcessor::serialize(
-    raft::RPC::VoteResponse request) const {
-  std::ostringstream oss;
-  oss << request;
-  return oss.str();
-}
-
 void MessageProcessor::process_message(std::string &id, std::string message,
-                                           raft::Server &server) {
+                                           raft::Server<std::string> &server) {
   if(category_ == network::MessageCategory::Client) {
     process_client_message(id, std::move(message), server);
   } else {
@@ -85,48 +59,24 @@ void MessageProcessor::process_message(std::string &id, std::string message,
 }
 
 void MessageProcessor::process_server_message(std::string &id, std::string message,
-                                           raft::Server &server) {
-  std::istringstream s(std::move(message));
-  s.exceptions(std::istringstream::failbit | std::istringstream::badbit);
+                                           raft::Server<std::string> &server) {
+  std::istringstream stream(std::move(message));
+  stream.exceptions(std::istringstream::failbit | std::istringstream::badbit);
   try {
     std::string name;
-    s >> name;
+    stream >> name;
     if (name == "AppendEntriesRequest") {
-      raft::RPC::AppendEntriesRequest request;
-      s >> request;
-      if (request.peer_id != id && !server.callbacks.identify(id, request.peer_id)) {
-        server.callbacks.drop(request.peer_id);
-        return;
-      }
-      server.on(request.peer_id, std::move(request));
+      process_impl<raft::RPC::AppendEntriesRequest<std::string> >(id, server, stream);
     } else if (name == "AppendEntriesResponse") {
-      raft::RPC::AppendEntriesResponse response;
-      s >> response;
-      if ( response.peer_id != id && !server.callbacks.identify(id, response.peer_id) ) {
-        server.callbacks.drop(response.peer_id);
-        return;
-      }
-      server.on(response.peer_id, std::move(response));
+      process_impl<raft::RPC::AppendEntriesResponse>(id, server, stream);
     } else if (name == "VoteResponse") {
-      raft::RPC::VoteResponse response;
-      s >> response;
-      if ( response.peer_id != id && !server.callbacks.identify(id, response.peer_id) ) {
-        server.callbacks.drop(response.peer_id);
-        return;
-      }
-      server.on(response.peer_id, std::move(response));
+      process_impl<raft::RPC::VoteResponse>(id, server, stream);
     } else if (name == "VoteRequest") {
-      raft::RPC::VoteRequest request;
-      s >> request;
-      if ( request.peer_id != id && !server.callbacks.identify(id, request.peer_id) ) {
-        server.callbacks.drop(request.peer_id);
-        return;
-      }
-      server.on(request.peer_id, std::move(request));
+      process_impl<raft::RPC::VoteRequest>(id, server, stream);
     } else if ( name == "ConfigChangeRequest" ) {
       raft::RPC::ConfigChangeRequest request;
-      s >> request;
-      server.on(request.peer_id, std::move(request));
+      stream >> request;
+      server.on(request.header.peer_id, std::move(request));
     } else {
       // failed to parse header
       server.callbacks.drop(id);
@@ -137,42 +87,9 @@ void MessageProcessor::process_server_message(std::string &id, std::string messa
   }
 }
 
-std::string MessageProcessor::serialize(
-    raft::RPC::ClientRequest request) const {
-  std::ostringstream oss;
-  oss << request;
-  return oss.str();
-}
-std::string MessageProcessor::serialize(
-    raft::RPC::ClientResponse response) const {
-  std::ostringstream oss;
-  oss << response;
-  return oss.str();
-}
-
-std::string MessageProcessor::serialize(
-  raft::RPC::LocalFailureResponse response) const {
-  std::ostringstream oss;
-  oss << response;
-  return oss.str();
-}
-
-std::string MessageProcessor::serialize(
-  raft::RPC::NotLeaderResponse response) const {
-  std::ostringstream oss;
-  oss << response;
-  return oss.str();
-}
-
-std::string MessageProcessor::serialize(raft::RPC::CurrentEntryResponse response) const {
-  std::ostringstream oss;
-  oss << response;
-  return oss.str();
-}
-
 void MessageProcessor::process_client_message(std::string &id,
                                              std::string message,
-                                             raft::Server &server) {
+                                             raft::Server<std::string> &server) {
   std::istringstream s(std::move(message));
   s.exceptions(std::istringstream::failbit | std::istringstream::badbit);
   try {
@@ -184,7 +101,7 @@ void MessageProcessor::process_client_message(std::string &id,
       request.client_id = id;
       server.on(id, std::move(request));
     } else if ( name == "CurrentEntryRequest" ) {
-      server.callbacks.client_send(id, raft::RPC::CurrentEntryResponse{server.storage->get_last_entry_info()});
+      server.callbacks.client_send(id, raft::RPC::CurrentEntryResponse{server.storage->log_state().commit});
     } else {
       // failed to parse header
       server.callbacks.drop(id);

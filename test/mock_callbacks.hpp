@@ -124,6 +124,9 @@ class Callbacks : public raft::Callbacks{
     ++commit_index_calls_;
   }
 
+  virtual void new_leader_elected(const std::string &) {
+  }
+
   inline virtual ~Callbacks() {}
 };
 }

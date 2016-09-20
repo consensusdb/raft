@@ -13,7 +13,7 @@ namespace asio {
 using ::asio::ip::tcp;
 Server::Server(::asio::io_service &io_service, short port, short client_port,
                std::string id, raft::PeerInfo known_peers,
-               std::unique_ptr<raft::Storage> storage,
+               std::unique_ptr<raft::Storage<std::string> > storage,
                const network::MessageProcessorFactory &factory,
                int heartbeat_ms)
     : mt_(std::random_device{}()),
@@ -135,7 +135,7 @@ void Server::drop(const std::string &temp_id) {
         return false;
       }), peers_.end());
 }
-raft::Server &Server::raft_server() { return raft_server_; }
+raft::Server<std::string> &Server::raft_server() { return raft_server_; }
 
 void Server::do_accept_peer() {
   if ( stop_ || accepting_peer_session_ != nullptr ) {
@@ -243,7 +243,7 @@ void Server::client_session_send(const std::string &id, M message) {
 }
 
 void Server::send(const std::string &id,
-                  const raft::RPC::AppendEntriesRequest &request) {
+                  const raft::RPC::AppendEntriesRequest<std::string> &request) {
   session_send(id, request);
 }
 
@@ -278,6 +278,10 @@ void Server::client_send(const std::string &id,
 void Server::client_send(const std::string &id,
                          const raft::RPC::CurrentEntryResponse &response) {
   client_session_send(id, response);
+}
+  
+void Server::new_leader_elected(const std::string &id) {
+  std::cout << raft_server().state.id <<  " has new leader " << id << " elected" << std::endl;
 }
 
 }

@@ -10,41 +10,24 @@ namespace raft {
 
 namespace RPC {
 
+template <typename data_t>
 struct AppendEntriesRequest {
-  std::string peer_id;  // also leader_id
-  std::string destination_id;
-  uint64_t message_id;
-  uint64_t term;
-  uint64_t prev_log_index;
-  uint64_t prev_log_term;
-  uint64_t leader_commit;
-  std::vector<Entry> entries;
+  MessageHeader header;
+  EntryInfo previous_entry;
+  std::vector<Entry<data_t> > entries;
 };
 
 struct AppendEntriesResponse {
-  std::string peer_id;
-  std::string destination_id;
-  uint64_t message_id;
-  uint64_t term;
+  MessageHeader header;
   bool success;
-  uint64_t match_index;
 };
 
 struct VoteRequest {
-  std::string peer_id;
-  std::string destination_id;
-  uint64_t message_id;
-  uint64_t term;
-  std::string candidate_id;
-  uint64_t last_log_index;
-  uint64_t last_log_term;
+  MessageHeader header;
 };
 
 struct VoteResponse {
-  std::string peer_id;
-  std::string destination_id;
-  uint64_t message_id;
-  uint64_t term;
+  MessageHeader header;
   bool vote_granted;
 };
 
@@ -92,13 +75,8 @@ struct PeerConfig {
 };
 
 struct ConfigChangeRequest {
-  std::string peer_id;  // also leader_id
-  std::string destination_id;
-  uint64_t term;
-  uint64_t prev_log_index;
-  uint64_t prev_log_term;
-  uint64_t leader_commit;
-  uint64_t index;
+  MessageHeader header;
+  uint64_t previous_entry;
   std::vector<PeerConfig> peer_configs;
   uint64_t request_watermark;
 };

@@ -1,78 +1,66 @@
 #include <simple_serialize.hpp>
 
-std::ostream &operator<<(std::ostream &os, const raft::Entry &entry) {
-  return os << entry.info.index << " " << entry.info.term << " " << entry.data;
+std::ostream &operator<<(std::ostream &os, const raft::EntryInfo &info) {
+  return os << info.index << " " << info.term;
 }
 
-std::istream &operator>>(std::istream &is, raft::Entry &entry) {
-  is >> entry.info.index >> entry.info.term >> entry.data;
-  return is;
+std::istream &operator>>(std::istream &is, raft::EntryInfo &info) {
+  return is >> info.index >> info.term;
+}
+
+std::ostream &operator<<(std::ostream &os, const raft::MessageHeader &header) {
+  return os << header.peer_id << " " << header.destination_id << " " << header.message_id << " " << header.term << " " << header.log_state.commit << " " << header.log_state.uncommit;
+}
+
+std::istream &operator>>(std::istream &is, raft::MessageHeader &header) {
+  return is >> header.peer_id >> header.destination_id >> header.message_id >> header.term >> header.log_state.commit >> header.log_state.uncommit;
+}
+
+std::ostream &operator<<(std::ostream &os, const raft::Entry<std::string> &entry) {
+  return os << entry.info << " " << entry.data;
+}
+
+std::istream &operator>>(std::istream &is, raft::Entry<std::string> &entry) {
+  return is >> entry.info >> entry.data;
 }
 
 std::ostream &operator<<(std::ostream &os,
-                         const raft::RPC::AppendEntriesRequest &request) {
-  os << "AppendEntriesRequest " << request.peer_id << " "
-    << request.destination_id << " " << request.message_id << " " << request.term << " "
-    << request.prev_log_index << " " << request.prev_log_term << " "
-    << request.leader_commit << " " <<  request.entries.size() << " ";
-  std::for_each(request.entries.begin(), request.entries.end(),
-                [&os](auto entry) { os << entry << " "; });
-  os << "\n";
-  return os;
+                         const raft::RPC::AppendEntriesRequest<std::string> &request) {
+  return os << "AppendEntriesRequest " << request.header << " "
+    << request.previous_entry << " " <<  request.entries << "\n";
 }
 
 std::istream &operator>>(std::istream &is,
-                         raft::RPC::AppendEntriesRequest &request) {
-  size_t num_entries;
-  is >> request.peer_id >> request.destination_id >> request.message_id >> request.term >>
-      request.prev_log_index >> request.prev_log_term >>
-      request.leader_commit >> num_entries;
-  request.entries.reserve(num_entries);
-  for (size_t i = 0; i < num_entries; ++i) {
-    raft::Entry entry;
-    is >> entry;
-    request.entries.emplace_back(std::move(entry));
-  }
-  return is;
+                         raft::RPC::AppendEntriesRequest<std::string> &request) {
+  return is >> request.header  >> request.previous_entry >> request.entries;
 }
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::AppendEntriesResponse &response) {
-  return os << "AppendEntriesResponse " << response.peer_id << " "
-            << response.destination_id << " " << response.message_id << " " << response.term << " "
-            << response.success << " " << response.match_index << " \n";
+  return os << "AppendEntriesResponse " << response.success << " \n";
 }
 
 std::istream &operator>>(std::istream &is,
                          raft::RPC::AppendEntriesResponse &response) {
-  return is >> response.peer_id >> response.destination_id >> response.message_id >> response.term >>
-    response.success >> response.match_index;
+  return is >> response.header >> response.success;
 }
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::VoteRequest &request) {
-  return os << "VoteRequest " << request.peer_id << " "
-            << request.destination_id << " " << request.message_id << " " << request.term << " "
-            << request.candidate_id << " " << request.last_log_index << " "
-            << request.last_log_term << " \n";
+  return os << "VoteRequest " << request.header << " \n";
 }
 
 std::istream &operator>>(std::istream &is, raft::RPC::VoteRequest &request) {
-  return is >> request.peer_id >> request.destination_id >> request.message_id >> request.term >>
-         request.candidate_id >> request.last_log_index >>
-         request.last_log_term;
+  return is >> request.header;
 }
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::VoteResponse &response) {
-  return os << "VoteResponse " << response.peer_id << " "
-            << response.destination_id << " " << response.message_id << " " << response.term << " "
-            << response.vote_granted << " \n";
+  return os << "VoteResponse " << response.header << " " << response.vote_granted << " \n";
 }
 
 std::istream &operator>>(std::istream &is, raft::RPC::VoteResponse &response) {
-  return is >> response.peer_id >> response.destination_id >> response.message_id >> response.term >>
-         response.vote_granted;
+  return is >> response.header >> response.vote_granted;
 }
 
 std::ostream &operator<<(std::ostream &os,
@@ -86,7 +74,7 @@ std::istream &operator>>(std::istream &is, raft::RPC::ClientRequest &request) {
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::ClientResponse &response) {
-  return os << "ClientResponse " << response.entry_info.index << " " <<response.entry_info.term << " \n";
+  return os << "ClientResponse " << response.entry_info << " \n";
 }
 
 std::ostream &operator<<(std::ostream &os,
@@ -101,29 +89,11 @@ std::ostream &operator<<(std::ostream &os,
 
 std::ostream &operator<<(std::ostream &os,
                          const raft::RPC::ConfigChangeRequest &request) {
-   os << "ConfigChangeRequest " << request.peer_id
-      << " " <<  request.destination_id << " " <<  request.term << " " <<  request.prev_log_index
-      << " " <<  request.prev_log_term << " " <<  request.leader_commit << " " <<  request.index
-      << " " <<  request.term << " " << request.peer_configs.size() << " ";
-  std::for_each(request.peer_configs.begin(), request.peer_configs.end(),
-                [&os](auto peer) { os << peer<< " "; });
-  os << "\n";
-  return os;
+   return os << "ConfigChangeRequest " << request.header << " " << request.previous_entry << " " << request.peer_configs <<"\n";
 }
 
 std::istream &operator>>(std::istream &is, raft::RPC::ConfigChangeRequest &request) {
-  size_t num_peers;
-   is >>  request.peer_id
-      >>  request.destination_id >>  request.term >>  request.prev_log_index
-      >>  request.prev_log_term >>  request.leader_commit >>  request.index
-      >>  request.term >> num_peers;
-  request.peer_configs.reserve(num_peers);
-  for (size_t i = 0; i < num_peers; ++i) {
-    raft::RPC::PeerConfig peer;
-    is >> peer;
-    request.peer_configs.emplace_back(std::move(peer));
-  }
-  return is;
+  return is >> request.header >> request.previous_entry >> request.peer_configs;
 }
 
 std::ostream &operator<<(std::ostream &os,

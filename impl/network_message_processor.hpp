@@ -34,9 +34,9 @@ enum MessageCategory {
 class MessageProcessor {
  public:
   virtual buffer_t process_read(std::string& id, size_t bytes_recieved,
-                                raft::Server& server) = 0;
+                                raft::Server<std::string>& server) = 0;
 
-  virtual std::string serialize(raft::RPC::AppendEntriesRequest) const = 0;
+  virtual std::string serialize(raft::RPC::AppendEntriesRequest<std::string>) const = 0;
   virtual std::string serialize(raft::RPC::AppendEntriesResponse) const = 0;
   virtual std::string serialize(raft::RPC::VoteRequest) const = 0;
   virtual std::string serialize(raft::RPC::VoteResponse) const = 0;

@@ -1,9 +1,9 @@
 CPPFLAGS=-std=c++14 -Wall -Wextra -Werror -g -fno-omit-frame-pointer -Iinclude -Iimpl -I../asio-1.10.6/include -DASIO_STANDALONE -Wno-unused-local-typedef -Wno-reorder
 
 LIBS= -lpthread
-OBJ=$(patsubst %.cpp,%.o,$(wildcard src/*cpp impl/*cpp) main.cpp)
-SRC=$(wildcard src/*cpp impl/*cpp)
-HDR=$(wildcard include/*hpp impl/*hpp)
+OBJ=$(patsubst %.cpp,%.o,$(wildcard impl/*cpp) main.cpp)
+SRC=$(wildcard impl/*cpp)
+HDR=$(wildcard include/*hpp include/*ipp impl/*hpp)
 
 CXX=clang++-3.6
 
@@ -53,5 +53,5 @@ TEST_SRC=$(wildcard test/*cpp)
 TEST_HDR=$(wildcard test/*hpp)
 TEST_OBJ=$(patsubst %.cpp,%.o,$(wildcard test/*cpp))
 
-raft_test.tsk : $(TEST_SRC) src/raft_server.cpp gtest_main.a
+raft_test.tsk : $(TEST_SRC) gtest_main.a
 	$(CXX) $(CPPFLAGS) $(TEST_CPPFLAGS) $(CXXFLAGS) $(TEST_CXXFLAGS) -lpthread $^ -o $@

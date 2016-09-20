@@ -1,10 +1,7 @@
 #pragma once
 
 #include <string>
-#include <vector>
 #include <cstdint>
-#include <unordered_map>
-#include <unordered_set>
 #include <memory>
 #include <raft_rpc.hpp>
 #include <raft_entry.hpp>
@@ -16,18 +13,19 @@
 
 namespace raft {
 
+template <typename data_t>
 class Server {
  public:
   Server(std::string id, PeerInfo known_peers,
-         std::unique_ptr<Storage> a_storage, Callbacks &callbacks)
+         std::unique_ptr<Storage<data_t> > a_storage, Callbacks<data_t> &callbacks)
       : state(id, std::move(known_peers)),
         storage(std::move(a_storage)),
         callbacks(callbacks) {}
   // the volatile state
   State state;
   // the non-volatile state
-  std::unique_ptr<Storage> storage;
-  Callbacks &callbacks;
+  std::unique_ptr<Storage<data_t> > storage;
+  Callbacks<data_t> &callbacks;
 
   // will always return a response. If the machine has already voted for someone
   // in the
@@ -42,7 +40,7 @@ class Server {
   void on(const std::string &peer_id, RPC::VoteResponse response);
 
   // will always return a response
-  void on(const std::string &peer_id, RPC::AppendEntriesRequest request);
+  void on(const std::string &peer_id, RPC::AppendEntriesRequest<data_t> request);
 
   // may return a request if more synchonization is needed
   void on(const std::string &peer_id, RPC::AppendEntriesResponse response);
@@ -73,4 +71,7 @@ class Server {
   // down.
   void step_down(uint64_t new_term);
 };
+
 }
+
+#include <raft_server.ipp>

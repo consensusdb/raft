@@ -1,11 +1,8 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <raft_entry.hpp>
-#include <sstream>
 #include <algorithm>
+#include <raft_entry.hpp>
 
 namespace raft {
 
@@ -13,8 +10,8 @@ struct peer_info_t {
   peer_info_t(std::string id, std::string ip, int port, int client_port)
       : ip_port{std::move(ip), port, client_port},
         id(std::move(id)),
-        next_index(1),
-        match_index(0),
+        next_entry({1,1}),
+        match_entry({0,0}),
         last_message_id(0),
         voted_for_me(false),
         waiting_for_response(false) {}
@@ -26,17 +23,13 @@ struct peer_info_t {
   }
   ip_port_t ip_port;
   std::string id;
-  uint64_t next_index;
-  uint64_t match_index;
+  EntryInfo next_entry;
+  EntryInfo match_entry;
   uint64_t last_message_id;
   bool voted_for_me;
   bool waiting_for_response;
 };
 
-// because the number of peers
-// usually hovers around 5, 7 or 9, a simple iteration over a
-// vector is good enough and simplifies the memory layout
-// which in turn offers greater cache locality and performance.
 typedef std::vector<peer_info_t> PeerInfo;
 
 struct State {
@@ -72,15 +65,15 @@ struct State {
 }
 
 //helper
-inline std::ostream& operator<<(std::ostream& os, raft::State::Role& role) {
+inline const char * to_string(const raft::State::Role& role) {
   switch (role) {
     case (raft::State::Role::Candidate):
-      return os << "candidate";
+      return "candidate";
     case (raft::State::Role::Leader):
-      return os << "leader";
+      return "leader";
     case (raft::State::Role::Follower):
-      return os << "follower";
+      return "follower";
     default:
-      return os << "????";
+      return "????";
   }
 }
